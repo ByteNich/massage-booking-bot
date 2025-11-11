@@ -12,6 +12,7 @@ class AdminKeyboards:
             [KeyboardButton("💆 Управление услугами")],
             [KeyboardButton("📊 Статистика")],
             [KeyboardButton("📅 Все записи")],
+            [KeyboardButton("📢 Рассылка")],
             [KeyboardButton("ℹ️ Информация о салоне")],
         ]
         return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
@@ -131,5 +132,27 @@ class AdminKeyboards:
         keyboard = [
             [InlineKeyboardButton("❌ Отменить запись", callback_data=f"admin_cancel_appointment_{appointment_id}")],
             [InlineKeyboardButton("◀️ Назад", callback_data="admin_back_to_appointments")],
+        ]
+        return InlineKeyboardMarkup(keyboard)
+
+    @staticmethod
+    def broadcast_confirm():
+        """Подтверждение рассылки"""
+        keyboard = [
+            [InlineKeyboardButton("✅ Отправить", callback_data="admin_broadcast_send")],
+            [InlineKeyboardButton("🖼 Добавить фото", callback_data="admin_broadcast_add_photo")],
+            [InlineKeyboardButton("✏️ Изменить текст", callback_data="admin_broadcast_edit_text")],
+            [InlineKeyboardButton("❌ Отменить", callback_data="admin_broadcast_cancel")],
+        ]
+        return InlineKeyboardMarkup(keyboard)
+
+    @staticmethod
+    def broadcast_with_photo_confirm():
+        """Подтверждение рассылки с фото"""
+        keyboard = [
+            [InlineKeyboardButton("✅ Отправить", callback_data="admin_broadcast_send")],
+            [InlineKeyboardButton("🗑 Удалить фото", callback_data="admin_broadcast_remove_photo")],
+            [InlineKeyboardButton("✏️ Изменить текст", callback_data="admin_broadcast_edit_text")],
+            [InlineKeyboardButton("❌ Отменить", callback_data="admin_broadcast_cancel")],
         ]
         return InlineKeyboardMarkup(keyboard)

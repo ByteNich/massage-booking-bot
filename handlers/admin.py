@@ -9,6 +9,7 @@ import config
 
 # States для ConversationHandler
 ADDING_SERVICE, ADDING_EMPLOYEE, EDITING_SERVICE, EDITING_EMPLOYEE = range(4)
+BROADCAST_TEXT, BROADCAST_PHOTO, BROADCAST_CONFIRM = range(3)
 
 
 class AdminHandlers:
@@ -804,3 +805,163 @@ class AdminHandlers:
                 "Выберите период:",
                 reply_markup=AdminKeyboards.all_appointments_filter()
             )
+
+    # === РАССЫЛКА ===
+
+    async def start_broadcast(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Начать процесс рассылки"""
+        await update.message.reply_text(
+            "📢 Создание рассылки\n\n"
+            "Отправьте текст сообщения для рассылки всем клиентам.\n\n"
+            "Используйте /cancel для отмены."
+        )
+        return BROADCAST_TEXT
+
+    async def receive_broadcast_text(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Получить текст рассылки"""
+        text = update.message.text
+
+        if text == '/cancel':
+            await update.message.reply_text("Рассылка отменена.")
+            return ConversationHandler.END
+
+        # Сохраняем текст
+        context.user_data['broadcast_text'] = text
+        context.user_data['broadcast_photo'] = None
+
+        # Показываем предпросмотр
+        await update.message.reply_text(
+            f"📋 Предпросмотр рассылки:\n\n{text}",
+            reply_markup=AdminKeyboards.broadcast_confirm()
+        )
+        return BROADCAST_CONFIRM
+
+    async def add_broadcast_photo(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Добавить фото к рассылке"""
+        query = update.callback_query
+        await query.answer()
+
+        await query.edit_message_text(
+            "🖼 Отправьте фото для рассылки.\n\n"
+            "Используйте /cancel для отмены."
+        )
+        return BROADCAST_PHOTO
+
+    async def receive_broadcast_photo(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Получить фото для рассылки"""
+        if update.message.text == '/cancel':
+            # Возврат к превью без фото
+            text = context.user_data.get('broadcast_text', '')
+            await update.message.reply_text(
+                f"📋 Предпросмотр рассылки:\n\n{text}",
+                reply_markup=AdminKeyboards.broadcast_confirm()
+            )
+            return BROADCAST_CONFIRM
+
+        if update.message.photo:
+            photo = update.message.photo[-1]  # Берем самое большое фото
+            context.user_data['broadcast_photo'] = photo.file_id
+
+            text = context.user_data.get('broadcast_text', '')
+
+            # Показываем превью с фото
+            await update.message.reply_photo(
+                photo=photo.file_id,
+                caption=f"📋 Предпросмотр рассылки:\n\n{text}",
+                reply_markup=AdminKeyboards.broadcast_with_photo_confirm()
+            )
+            return BROADCAST_CONFIRM
+        else:
+            await update.message.reply_text("Пожалуйста, отправьте фото.")
+            return BROADCAST_PHOTO
+
+    async def edit_broadcast_text(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Изменить текст рассылки"""
+        query = update.callback_query
+        await query.answer()
+
+        await query.edit_message_text(
+            "✏️ Отправьте новый текст для рассылки.\n\n"
+            "Используйте /cancel для отмены."
+        )
+        return BROADCAST_TEXT
+
+    async def remove_broadcast_photo(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Удалить фото из рассылки"""
+        query = update.callback_query
+        await query.answer()
+
+        context.user_data['broadcast_photo'] = None
+        text = context.user_data.get('broadcast_text', '')
+
+        await query.edit_message_caption(
+            caption=f"📋 Предпросмотр рассылки:\n\n{text}",
+            reply_markup=AdminKeyboards.broadcast_confirm()
+        )
+        return BROADCAST_CONFIRM
+
+    async def send_broadcast(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Отправить рассылку всем клиентам"""
+        query = update.callback_query
+        await query.answer()
+
+        text = context.user_data.get('broadcast_text', '')
+        photo = context.user_data.get('broadcast_photo')
+
+        await query.edit_message_text("📤 Отправка рассылки...")
+
+        # Получаем всех клиентов
+        async with async_session() as session:
+            result = await session.execute(
+                select(User).where(
+                    and_(
+                        User.role == config.ROLE_CLIENT,
+                        User.telegram_id > 0  # Только те, кто использовал бота
+                    )
+                )
+            )
+            clients = result.scalars().all()
+
+            success_count = 0
+            fail_count = 0
+
+            for client in clients:
+                try:
+                    if photo:
+                        await context.bot.send_photo(
+                            chat_id=client.telegram_id,
+                            photo=photo,
+                            caption=text
+                        )
+                    else:
+                        await context.bot.send_message(
+                            chat_id=client.telegram_id,
+                            text=text
+                        )
+                    success_count += 1
+                except Exception as e:
+                    fail_count += 1
+                    print(f"Failed to send broadcast to {client.telegram_id}: {e}")
+
+        # Очищаем данные
+        context.user_data.pop('broadcast_text', None)
+        context.user_data.pop('broadcast_photo', None)
+
+        await query.message.reply_text(
+            f"✅ Рассылка завершена!\n\n"
+            f"Отправлено: {success_count}\n"
+            f"Ошибок: {fail_count}"
+        )
+        return ConversationHandler.END
+
+    async def cancel_broadcast(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Отменить рассылку"""
+        query = update.callback_query
+        await query.answer()
+
+        # Очищаем данные
+        context.user_data.pop('broadcast_text', None)
+        context.user_data.pop('broadcast_photo', None)
+
+        await query.edit_message_text("❌ Рассылка отменена.")
+        return ConversationHandler.END

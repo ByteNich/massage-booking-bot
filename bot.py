@@ -20,7 +20,7 @@ from database.database import init_db, async_session
 from database.models import Employee, User
 from handlers.client import ClientHandlers, SELECTING_SERVICE, SELECTING_DATE, SELECTING_TIME, CONFIRMING_BOOKING
 from handlers.employee import EmployeeHandlers, EMP_SELECTING_SERVICE, EMP_ENTERING_PHONE, EMP_SELECTING_DATE, EMP_SELECTING_TIME, EMP_CONFIRMING, EMP_EDITING
-from handlers.admin import AdminHandlers, EDITING_EMPLOYEE, EDITING_SERVICE
+from handlers.admin import AdminHandlers, EDITING_EMPLOYEE, EDITING_SERVICE, BROADCAST_TEXT, BROADCAST_PHOTO, BROADCAST_CONFIRM
 from utils.scheduler import NotificationScheduler
 from utils.helpers import get_user_role
 from sqlalchemy import select
@@ -151,6 +151,7 @@ class MassageBookingBot:
                 await self.admin_handlers.show_statistics_menu(update, context)
             elif text == "📅 Все записи":
                 await self.admin_handlers.show_appointments_filter(update, context)
+            # "📢 Рассылка" обрабатывается ConversationHandler
 
     async def route_callback(self, update: Update, context):
         """Маршрутизация callback запросов"""
@@ -352,11 +353,43 @@ class MassageBookingBot:
             fallbacks=[CommandHandler("cancel", self.employee_handlers.process_appointment_edit)],
         )
 
+        # ConversationHandler для рассылки
+        broadcast_handler = ConversationHandler(
+            entry_points=[
+                MessageHandler(
+                    filters.TEXT & filters.Regex('^📢 Рассылка$'),
+                    self.admin_handlers.start_broadcast
+                ),
+            ],
+            states={
+                BROADCAST_TEXT: [
+                    MessageHandler(filters.TEXT & ~filters.COMMAND, self.admin_handlers.receive_broadcast_text),
+                    CommandHandler("cancel", self.admin_handlers.cancel_broadcast),
+                ],
+                BROADCAST_PHOTO: [
+                    MessageHandler(filters.PHOTO, self.admin_handlers.receive_broadcast_photo),
+                    MessageHandler(filters.TEXT & ~filters.COMMAND, self.admin_handlers.receive_broadcast_photo),
+                    CommandHandler("cancel", self.admin_handlers.cancel_broadcast),
+                ],
+                BROADCAST_CONFIRM: [
+                    CallbackQueryHandler(self.admin_handlers.send_broadcast, pattern="^admin_broadcast_send$"),
+                    CallbackQueryHandler(self.admin_handlers.add_broadcast_photo, pattern="^admin_broadcast_add_photo$"),
+                    CallbackQueryHandler(self.admin_handlers.edit_broadcast_text, pattern="^admin_broadcast_edit_text$"),
+                    CallbackQueryHandler(self.admin_handlers.remove_broadcast_photo, pattern="^admin_broadcast_remove_photo$"),
+                    CallbackQueryHandler(self.admin_handlers.cancel_broadcast, pattern="^admin_broadcast_cancel$"),
+                ],
+            },
+            fallbacks=[
+                CommandHandler("cancel", self.admin_handlers.cancel_broadcast),
+            ],
+        )
+
         self.application.add_handler(booking_handler)
         self.application.add_handler(edit_employee_handler)
         self.application.add_handler(edit_service_handler)
         self.application.add_handler(emp_new_appointment_handler)
         self.application.add_handler(emp_edit_appointment_handler)
+        self.application.add_handler(broadcast_handler)
         self.application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.route_message))
         self.application.add_handler(CallbackQueryHandler(self.route_callback))
 
