@@ -1,4 +1,5 @@
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, KeyboardButton
+from utils.helpers import format_date_russian
 
 
 class EmployeeKeyboards:
@@ -6,22 +7,21 @@ class EmployeeKeyboards:
 
     @staticmethod
     def main_menu():
-        """Главное меню сотрудника"""
+        """Главное меню сотрудника (inline)"""
         keyboard = [
-            [KeyboardButton("📅 Мои записи на сегодня")],
-            [KeyboardButton("📆 Расписание на неделю")],
-            [KeyboardButton("➕ Добавить запись")],
-            [KeyboardButton("✅ Отметить выполнение")],
-            [KeyboardButton("ℹ️ Информация о салоне")],
+            [InlineKeyboardButton("📅 Мои записи на сегодня", callback_data="emp_today")],
+            [InlineKeyboardButton("📆 Расписание на неделю", callback_data="emp_week")],
+            [InlineKeyboardButton("➕ Добавить запись", callback_data="emp_add")],
+            [InlineKeyboardButton("✅ Отметить выполнение", callback_data="emp_mark")],
         ]
-        return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+        return InlineKeyboardMarkup(keyboard)
 
     @staticmethod
     def select_date_for_schedule(available_dates: list):
         """Выбор даты для просмотра расписания"""
         keyboard = []
         for date in available_dates:
-            date_str = date.strftime('%d.%m.%Y (%a)')
+            date_str = format_date_russian(date, include_weekday=True)
             keyboard.append([
                 InlineKeyboardButton(date_str, callback_data=f"emp_date_{date.strftime('%Y-%m-%d')}")
             ])
@@ -88,7 +88,7 @@ class EmployeeKeyboards:
         """Выбор даты для новой записи"""
         keyboard = []
         for date in available_dates:
-            date_str = date.strftime('%d.%m.%Y (%a)')
+            date_str = format_date_russian(date, include_weekday=True)
             keyboard.append([
                 InlineKeyboardButton(date_str, callback_data=f"emp_new_date_{date.strftime('%Y-%m-%d')}")
             ])

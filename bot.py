@@ -124,15 +124,9 @@ class MassageBookingBot:
         if role == config.ROLE_CLIENT:
             pass  # Все действия через inline кнопки
 
-        # Сотрудник
+        # Сотрудник (теперь использует inline кнопки, текстовые сообщения не нужны)
         elif role == config.ROLE_EMPLOYEE:
-            if text == "📅 Мои записи на сегодня":
-                await self.employee_handlers.show_today_appointments(update, context)
-            elif text == "📆 Расписание на неделю":
-                await self.employee_handlers.show_week_schedule(update, context)
-            elif text == "✅ Отметить выполнение":
-                await self.employee_handlers.show_appointments_for_completion(update, context)
-            # "➕ Добавить запись" обрабатывается ConversationHandler
+            pass  # Все действия через inline кнопки
 
         # Администратор
         elif role == config.ROLE_ADMIN:
@@ -175,7 +169,11 @@ class MassageBookingBot:
 
         # Сотрудник
         elif role == config.ROLE_EMPLOYEE:
-            if data.startswith("emp_date_"):
+            # Главное меню
+            if data in ["emp_today", "emp_week", "emp_add", "emp_mark"]:
+                await self.employee_handlers.handle_main_menu_callback(update, context)
+            # Навигация по записям
+            elif data.startswith("emp_date_"):
                 await self.employee_handlers.show_date_schedule(update, context)
             elif data.startswith("emp_appointment_"):
                 await self.employee_handlers.show_appointment_detail(update, context)
@@ -187,6 +185,7 @@ class MassageBookingBot:
                 await self.employee_handlers.mark_complete(update, context)
             elif data in ["emp_back_to_main", "emp_back_to_list"]:
                 await self.employee_handlers.handle_back_button(update, context)
+            # emp_service_, emp_new_date_, emp_new_time_, etc. обрабатываются ConversationHandler
 
         # Администратор
         elif role == config.ROLE_ADMIN:
@@ -301,9 +300,9 @@ class MassageBookingBot:
         # ConversationHandler для создания записи сотрудником
         emp_new_appointment_handler = ConversationHandler(
             entry_points=[
-                MessageHandler(
-                    filters.TEXT & filters.Regex('^➕ Добавить запись$'),
-                    self.employee_handlers.start_new_appointment
+                CallbackQueryHandler(
+                    self.employee_handlers.start_new_appointment,
+                    pattern="^emp_add$"
                 ),
             ],
             states={

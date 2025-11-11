@@ -35,8 +35,26 @@ class EmployeeHandlers:
             reply_markup=EmployeeKeyboards.main_menu()
         )
 
+    async def handle_main_menu_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Обработка callback'ов главного меню"""
+        query = update.callback_query
+        await query.answer()
+        data = query.data
+
+        if data == "emp_today":
+            await self.show_today_appointments(update, context)
+        elif data == "emp_week":
+            await self.show_week_schedule(update, context)
+        elif data == "emp_add":
+            await self.start_new_appointment(update, context)
+        elif data == "emp_mark":
+            await self.show_appointments_for_completion(update, context)
+
     async def show_today_appointments(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Показать записи на сегодня"""
+        query = update.callback_query
+        if query:
+            await query.answer()
         user_id = update.effective_user.id
 
         async with async_session() as session:
@@ -69,10 +87,11 @@ class EmployeeHandlers:
             appointments_data = result.all()
 
             if not appointments_data:
-                await update.message.reply_text(
-                    "На сегодня у вас нет записей.",
-                    reply_markup=EmployeeKeyboards.main_menu()
-                )
+                text = "На сегодня у вас нет записей."
+                if query:
+                    await query.edit_message_text(text)
+                else:
+                    await update.message.reply_text(text)
                 return
 
             # Формируем сообщение
@@ -91,10 +110,16 @@ class EmployeeHandlers:
                 )
 
             appointments = [a[0] for a in appointments_data]
-            await update.message.reply_text(
-                message,
-                reply_markup=EmployeeKeyboards.appointment_list(appointments)
-            )
+            if query:
+                await query.edit_message_text(
+                    message,
+                    reply_markup=EmployeeKeyboards.appointment_list(appointments)
+                )
+            else:
+                await update.message.reply_text(
+                    message,
+                    reply_markup=EmployeeKeyboards.appointment_list(appointments)
+                )
 
     async def show_week_schedule(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Показать расписание на неделю"""
