@@ -158,26 +158,20 @@ class MassageBookingBot:
         user_id = update.effective_user.id
         role = await self.get_user_role_handler(user_id)
 
-        # Клиент
+        # Клиент (обработка НЕ-ConversationHandler callbacks)
         if role == config.ROLE_CLIENT:
             if data.startswith("category_"):
                 await self.client_handlers.show_category_services(update, context)
             elif data.startswith("service_") and not data.startswith("service_actions"):
                 await self.client_handlers.show_service_detail(update, context)
-            elif data.startswith("book_"):
-                await self.client_handlers.start_booking(update, context)
-            elif data.startswith("date_"):
-                await self.client_handlers.select_date(update, context)
-            elif data.startswith("time_"):
-                await self.client_handlers.select_time(update, context)
-            elif data == "confirm_booking":
-                await self.client_handlers.confirm_booking(update, context)
-            elif data == "cancel_booking":
-                await self.client_handlers.cancel_booking(update, context)
-            elif data.startswith("appointment_"):
+            elif data.startswith("appointment_") and not data.startswith("cancel_appointment_"):
                 await self.client_handlers.show_appointment_detail(update, context)
             elif data.startswith("cancel_appointment_"):
                 await self.client_handlers.cancel_appointment(update, context)
+            # Обработка кнопок "Назад"
+            elif data.startswith("back_"):
+                await self.client_handlers.handle_back_button(update, context)
+            # book_, date_, time_, confirm_booking, cancel_booking обрабатываются ConversationHandler
 
         # Сотрудник
         elif role == config.ROLE_EMPLOYEE:
@@ -243,6 +237,30 @@ class MassageBookingBot:
         self.application.add_handler(CommandHandler("start", self.route_start_command))
         self.application.add_handler(MessageHandler(filters.CONTACT, self.client_handlers.handle_contact))
 
+        # ConversationHandler для процесса бронирования клиентов
+        booking_handler = ConversationHandler(
+            entry_points=[
+                CallbackQueryHandler(self.client_handlers.start_booking, pattern="^book_"),
+            ],
+            states={
+                SELECTING_DATE: [
+                    CallbackQueryHandler(self.client_handlers.select_date, pattern="^date_"),
+                    CallbackQueryHandler(self.client_handlers.cancel_booking, pattern="^cancel_booking$"),
+                ],
+                SELECTING_TIME: [
+                    CallbackQueryHandler(self.client_handlers.select_time, pattern="^time_"),
+                    CallbackQueryHandler(self.client_handlers.cancel_booking, pattern="^cancel_booking$"),
+                ],
+                CONFIRMING_BOOKING: [
+                    CallbackQueryHandler(self.client_handlers.confirm_booking, pattern="^confirm_booking$"),
+                    CallbackQueryHandler(self.client_handlers.cancel_booking, pattern="^cancel_booking$"),
+                ],
+            },
+            fallbacks=[
+                CallbackQueryHandler(self.client_handlers.cancel_booking, pattern="^cancel_booking$"),
+            ],
+        )
+
         # ConversationHandler для редактирования сотрудников
         edit_employee_handler = ConversationHandler(
             entry_points=[CallbackQueryHandler(
@@ -276,6 +294,7 @@ class MassageBookingBot:
             fallbacks=[CommandHandler("cancel", self.admin_handlers.process_service_edit)],
         )
 
+        self.application.add_handler(booking_handler)
         self.application.add_handler(edit_employee_handler)
         self.application.add_handler(edit_service_handler)
         self.application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.route_message))

@@ -445,3 +445,81 @@ class ClientHandlers:
         )
 
         await update.message.reply_text(contacts, reply_markup=ClientKeyboards.main_menu())
+
+    async def handle_back_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Универсальный обработчик кнопки Назад для клиентов"""
+        query = update.callback_query
+        await query.answer()
+
+        data = query.data
+
+        # Назад к главному меню
+        if data == "back_to_main":
+            try:
+                await query.message.delete()
+            except:
+                pass
+            await query.message.reply_text(
+                f"Добро пожаловать в салон красоты «{config.SALON_INFO['name']}»! 💆‍♀️\n\n"
+                f"Используйте меню ниже для навигации:",
+                reply_markup=ClientKeyboards.main_menu()
+            )
+
+        # Назад к категориям
+        elif data == "back_to_categories":
+            async with async_session() as session:
+                result = await session.execute(
+                    select(Service.category).distinct().where(Service.is_active == True)
+                )
+                categories = [row[0] for row in result.all()]
+
+            await query.edit_message_text(
+                "Выберите категорию услуг:",
+                reply_markup=ClientKeyboards.services_categories(categories)
+            )
+
+        # Назад к списку услуг
+        elif data == "back_to_services":
+            # Получаем категорию из контекста (если есть)
+            await query.edit_message_text(
+                "Выберите услугу или категорию:",
+            )
+            # Показываем категории
+            async with async_session() as session:
+                result = await session.execute(
+                    select(Service.category).distinct().where(Service.is_active == True)
+                )
+                categories = [row[0] for row in result.all()]
+
+            await query.edit_message_text(
+                "Выберите категорию услуг:",
+                reply_markup=ClientKeyboards.services_categories(categories)
+            )
+
+        # Назад к списку записей
+        elif data == "back_to_appointments":
+            user_id = update.effective_user.id
+
+            async with async_session() as session:
+                result = await session.execute(
+                    select(User).where(User.telegram_id == user_id)
+                )
+                user = result.scalars().first()
+
+                result = await session.execute(
+                    select(Appointment).where(
+                        Appointment.user_id == user.id,
+                        Appointment.status == 'scheduled',
+                        Appointment.appointment_date >= datetime.now()
+                    ).order_by(Appointment.appointment_date)
+                )
+                appointments = result.scalars().all()
+
+                if not appointments:
+                    await query.edit_message_text("У вас нет активных записей.")
+                    return
+
+                await query.edit_message_text(
+                    "Ваши записи:",
+                    reply_markup=ClientKeyboards.my_appointments(appointments)
+                )
