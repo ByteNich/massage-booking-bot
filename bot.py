@@ -128,17 +128,9 @@ class MassageBookingBot:
         elif role == config.ROLE_EMPLOYEE:
             pass  # Все действия через inline кнопки
 
-        # Администратор
+        # Администратор (теперь использует inline кнопки, текстовые сообщения не нужны)
         elif role == config.ROLE_ADMIN:
-            if text == "👥 Управление сотрудниками":
-                await self.admin_handlers.show_employees_menu(update, context)
-            elif text == "💆 Управление услугами":
-                await self.admin_handlers.show_services_menu(update, context)
-            elif text == "📊 Статистика":
-                await self.admin_handlers.show_statistics_menu(update, context)
-            elif text == "📅 Все записи":
-                await self.admin_handlers.show_appointments_filter(update, context)
-            # "📢 Рассылка" обрабатывается ConversationHandler
+            pass  # Все действия через inline кнопки
 
     async def route_callback(self, update: Update, context):
         """Маршрутизация callback запросов"""
@@ -189,7 +181,20 @@ class MassageBookingBot:
 
         # Администратор
         elif role == config.ROLE_ADMIN:
-            if data == "admin_list_employees":
+            # Главное меню
+            if data in ["admin_employees", "admin_services", "admin_stats", "admin_appointments", "admin_broadcast"]:
+                if data == "admin_employees":
+                    await self.admin_handlers.show_employees_menu(update, context)
+                elif data == "admin_services":
+                    await self.admin_handlers.show_services_menu(update, context)
+                elif data == "admin_stats":
+                    await self.admin_handlers.show_statistics_menu(update, context)
+                elif data == "admin_appointments":
+                    await self.admin_handlers.show_appointments_filter(update, context)
+                elif data == "admin_broadcast":
+                    await self.admin_handlers.start_broadcast(update, context)
+            # Навигация
+            elif data == "admin_list_employees":
                 await self.admin_handlers.show_employees_list(update, context)
             elif data.startswith("admin_edit_employee_"):
                 await self.admin_handlers.start_edit_employee(update, context)
@@ -353,9 +358,9 @@ class MassageBookingBot:
         # ConversationHandler для рассылки
         broadcast_handler = ConversationHandler(
             entry_points=[
-                MessageHandler(
-                    filters.TEXT & filters.Regex('^📢 Рассылка$'),
-                    self.admin_handlers.start_broadcast
+                CallbackQueryHandler(
+                    self.admin_handlers.start_broadcast,
+                    pattern="^admin_broadcast$"
                 ),
             ],
             states={

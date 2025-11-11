@@ -810,11 +810,20 @@ class AdminHandlers:
 
     async def start_broadcast(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Начать процесс рассылки"""
-        await update.message.reply_text(
-            "📢 Создание рассылки\n\n"
-            "Отправьте текст сообщения для рассылки всем клиентам.\n\n"
-            "Используйте /cancel для отмены."
-        )
+        query = update.callback_query
+        if query:
+            await query.answer()
+            await query.edit_message_text(
+                "📢 Создание рассылки\n\n"
+                "Отправьте текст сообщения для рассылки всем клиентам.\n\n"
+                "Используйте /cancel для отмены."
+            )
+        else:
+            await update.message.reply_text(
+                "📢 Создание рассылки\n\n"
+                "Отправьте текст сообщения для рассылки всем клиентам.\n\n"
+                "Используйте /cancel для отмены."
+            )
         return BROADCAST_TEXT
 
     async def receive_broadcast_text(self, update: Update, context: ContextTypes.DEFAULT_TYPE):

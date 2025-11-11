@@ -6,16 +6,15 @@ class AdminKeyboards:
 
     @staticmethod
     def main_menu():
-        """Главное меню администратора"""
+        """Главное меню администратора (inline)"""
         keyboard = [
-            [KeyboardButton("👥 Управление сотрудниками")],
-            [KeyboardButton("💆 Управление услугами")],
-            [KeyboardButton("📊 Статистика")],
-            [KeyboardButton("📅 Все записи")],
-            [KeyboardButton("📢 Рассылка")],
-            [KeyboardButton("ℹ️ Информация о салоне")],
+            [InlineKeyboardButton("👥 Управление сотрудниками", callback_data="admin_employees")],
+            [InlineKeyboardButton("💆 Управление услугами", callback_data="admin_services")],
+            [InlineKeyboardButton("📊 Статистика", callback_data="admin_stats")],
+            [InlineKeyboardButton("📅 Все записи", callback_data="admin_appointments")],
+            [InlineKeyboardButton("📢 Рассылка", callback_data="admin_broadcast")],
         ]
-        return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+        return InlineKeyboardMarkup(keyboard)
 
     @staticmethod
     def employees_menu():
