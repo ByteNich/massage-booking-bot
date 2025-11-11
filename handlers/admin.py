@@ -14,7 +14,8 @@ ADDING_SERVICE, ADDING_EMPLOYEE, EDITING_SERVICE, EDITING_EMPLOYEE = range(4)
 class AdminHandlers:
     """Обработчики для администратора"""
 
-    def __init__(self):
+    def __init__(self, scheduler=None):
+        self.scheduler = scheduler
         self.temp_data = {}  # Временное хранилище данных
 
     async def start(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -315,6 +316,44 @@ class AdminHandlers:
             )
             popular_services = result.all()
 
+            # Статистика по пользователям
+            # Общее количество пользователей
+            result = await session.execute(
+                select(func.count(User.id)).where(User.role == config.ROLE_CLIENT)
+            )
+            total_users = result.scalar()
+
+            # Новые пользователи за период
+            result = await session.execute(
+                select(func.count(User.id)).where(
+                    and_(
+                        User.role == config.ROLE_CLIENT,
+                        User.created_at >= start_date
+                    )
+                )
+            )
+            new_users = result.scalar()
+
+            # Активные пользователи (сделали запись в этом периоде)
+            result = await session.execute(
+                select(func.count(func.distinct(Appointment.user_id))).where(
+                    Appointment.appointment_date >= start_date
+                )
+            )
+            active_users = result.scalar()
+
+            # Постоянные клиенты (больше 1 выполненной записи всего времени)
+            result = await session.execute(
+                select(func.count(func.distinct(Appointment.user_id))).select_from(
+                    Appointment
+                ).where(
+                    Appointment.status == 'completed'
+                ).group_by(Appointment.user_id).having(
+                    func.count(Appointment.id) > 1
+                )
+            )
+            repeat_customers = len(result.all())
+
             # Формируем сообщение
             stats_message = f"📊 Статистика {period_name}:\n\n"
             stats_message += f"📅 Всего записей: {total_appointments}\n"
@@ -322,6 +361,12 @@ class AdminHandlers:
             stats_message += f"📝 Запланировано: {scheduled_appointments}\n"
             stats_message += f"❌ Отменено: {cancelled_appointments}\n\n"
             stats_message += f"💰 Доход: {total_revenue:.2f} ₽\n\n"
+
+            # Статистика по клиентам
+            stats_message += f"👥 Всего клиентов: {total_users}\n"
+            stats_message += f"🆕 Новых {period_name}: {new_users}\n"
+            stats_message += f"⚡ Активных {period_name}: {active_users}\n"
+            stats_message += f"🔄 Постоянных клиентов: {repeat_customers}\n\n"
 
             if popular_services:
                 stats_message += "🔥 Популярные услуги:\n"
@@ -435,13 +480,24 @@ class AdminHandlers:
 
         async with async_session() as session:
             result = await session.execute(
-                select(Appointment).where(Appointment.id == appointment_id)
+                select(Appointment, User, Service, Employee).join(
+                    User, Appointment.user_id == User.id
+                ).join(
+                    Service, Appointment.service_id == Service.id
+                ).join(
+                    Employee, Appointment.employee_id == Employee.id
+                ).where(Appointment.id == appointment_id)
             )
-            appointment = result.scalars().first()
+            row = result.first()
 
-            if appointment:
+            if row:
+                appointment, user, service, employee = row
                 appointment.status = 'cancelled'
                 await session.commit()
+
+                # Отправляем уведомления
+                if self.scheduler:
+                    await self.scheduler.notify_appointment_cancelled(appointment, user, service, employee, 'admin')
 
                 await query.edit_message_text(
                     "❌ Запись отменена."

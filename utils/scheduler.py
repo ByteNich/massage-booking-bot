@@ -142,3 +142,132 @@ class NotificationScheduler:
                 await self.bot.send_message(chat_id=employee.user.telegram_id, text=employee_message)
         except Exception as e:
             print(f"Error sending notification to employee {employee.id}: {e}")
+
+        # Уведомление администратору
+        admin_message = (
+            f"📝 Новая запись в системе!\n\n"
+            f"📅 Дата: {date_str}\n"
+            f"💆 Услуга: {service.name}\n"
+            f"👤 Мастер: {employee.name}\n"
+            f"👤 Клиент: {client_name}\n"
+            f"📞 Телефон: {user.phone or 'не указан'}"
+        )
+
+        try:
+            await self.bot.send_message(chat_id=config.ADMIN_ID, text=admin_message)
+        except Exception as e:
+            print(f"Error sending notification to admin: {e}")
+
+    async def notify_appointment_cancelled(self, appointment: Appointment, user: User, service: Service, employee: Employee, cancelled_by: str):
+        """Уведомление об отмене записи"""
+        date_str = appointment.appointment_date.strftime('%d.%m.%Y в %H:%M')
+        client_name = f"{user.first_name} {user.last_name or ''}".strip()
+
+        # Уведомление клиенту (если отменил не клиент)
+        if cancelled_by != 'client':
+            client_message = (
+                f"❌ Ваша запись отменена\n\n"
+                f"📅 Дата: {date_str}\n"
+                f"💆 Услуга: {service.name}\n"
+                f"👤 Мастер: {employee.name}\n\n"
+                f"Для новой записи обратитесь к администратору."
+            )
+            try:
+                await self.bot.send_message(chat_id=user.telegram_id, text=client_message)
+            except Exception as e:
+                print(f"Error sending cancellation notification to user {user.telegram_id}: {e}")
+
+        # Уведомление сотруднику (если отменил не сотрудник)
+        if cancelled_by != 'employee':
+            employee_message = (
+                f"❌ Запись отменена\n\n"
+                f"📅 Дата: {date_str}\n"
+                f"💆 Услуга: {service.name}\n"
+                f"👤 Клиент: {client_name}\n"
+                f"📞 Телефон: {user.phone or 'не указан'}"
+            )
+            try:
+                if employee.user:
+                    await self.bot.send_message(chat_id=employee.user.telegram_id, text=employee_message)
+            except Exception as e:
+                print(f"Error sending cancellation notification to employee {employee.id}: {e}")
+
+        # Уведомление администратору
+        admin_message = (
+            f"❌ Запись отменена ({cancelled_by})\n\n"
+            f"📅 Дата: {date_str}\n"
+            f"💆 Услуга: {service.name}\n"
+            f"👤 Мастер: {employee.name}\n"
+            f"👤 Клиент: {client_name}\n"
+            f"📞 Телефон: {user.phone or 'не указан'}"
+        )
+        try:
+            await self.bot.send_message(chat_id=config.ADMIN_ID, text=admin_message)
+        except Exception as e:
+            print(f"Error sending cancellation notification to admin: {e}")
+
+    async def notify_appointment_completed(self, appointment: Appointment, user: User, service: Service, employee: Employee):
+        """Уведомление о выполнении записи"""
+        date_str = appointment.appointment_date.strftime('%d.%m.%Y в %H:%M')
+        client_name = f"{user.first_name} {user.last_name or ''}".strip()
+
+        # Уведомление администратору
+        admin_message = (
+            f"✅ Запись выполнена!\n\n"
+            f"📅 Дата: {date_str}\n"
+            f"💆 Услуга: {service.name}\n"
+            f"👤 Мастер: {employee.name}\n"
+            f"👤 Клиент: {client_name}\n"
+            f"💰 Сумма: {service.price} ₽"
+        )
+        try:
+            await self.bot.send_message(chat_id=config.ADMIN_ID, text=admin_message)
+        except Exception as e:
+            print(f"Error sending completion notification to admin: {e}")
+
+    async def notify_appointment_edited(self, appointment: Appointment, user: User, service: Service, employee: Employee, edited_by: str):
+        """Уведомление об изменении записи"""
+        date_str = appointment.appointment_date.strftime('%d.%m.%Y в %H:%M')
+        client_name = f"{user.first_name} {user.last_name or ''}".strip()
+
+        # Уведомление клиенту
+        client_message = (
+            f"✏️ Ваша запись изменена\n\n"
+            f"📅 Новая дата: {date_str}\n"
+            f"💆 Услуга: {service.name}\n"
+            f"👤 Мастер: {employee.name}\n"
+            f"📍 Адрес: {config.SALON_INFO['address']}"
+        )
+        try:
+            await self.bot.send_message(chat_id=user.telegram_id, text=client_message)
+        except Exception as e:
+            print(f"Error sending edit notification to user {user.telegram_id}: {e}")
+
+        # Уведомление сотруднику (если редактировал не он)
+        if edited_by != 'employee':
+            employee_message = (
+                f"✏️ Запись изменена\n\n"
+                f"📅 Новая дата: {date_str}\n"
+                f"💆 Услуга: {service.name}\n"
+                f"👤 Клиент: {client_name}\n"
+                f"📞 Телефон: {user.phone or 'не указан'}"
+            )
+            try:
+                if employee.user:
+                    await self.bot.send_message(chat_id=employee.user.telegram_id, text=employee_message)
+            except Exception as e:
+                print(f"Error sending edit notification to employee {employee.id}: {e}")
+
+        # Уведомление администратору
+        admin_message = (
+            f"✏️ Запись изменена ({edited_by})\n\n"
+            f"📅 Новая дата: {date_str}\n"
+            f"💆 Услуга: {service.name}\n"
+            f"👤 Мастер: {employee.name}\n"
+            f"👤 Клиент: {client_name}\n"
+            f"📞 Телефон: {user.phone or 'не указан'}"
+        )
+        try:
+            await self.bot.send_message(chat_id=config.ADMIN_ID, text=admin_message)
+        except Exception as e:
+            print(f"Error sending edit notification to admin: {e}")

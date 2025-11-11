@@ -228,12 +228,13 @@ class MassageBookingBot:
         # Инициализация обработчиков
         self.client_handlers = ClientHandlers(None)  # scheduler будет установлен позже
         self.employee_handlers = EmployeeHandlers(None)  # scheduler будет установлен позже
-        self.admin_handlers = AdminHandlers()
+        self.admin_handlers = AdminHandlers(None)  # scheduler будет установлен позже
 
         # Устанавливаем scheduler после инициализации
         async def set_scheduler():
             self.client_handlers.scheduler = self.scheduler
             self.employee_handlers.scheduler = self.scheduler
+            self.admin_handlers.scheduler = self.scheduler
 
         self.application.job_queue.run_once(lambda _: asyncio.create_task(set_scheduler()), 1)
 

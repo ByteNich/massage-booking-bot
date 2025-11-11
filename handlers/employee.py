@@ -224,13 +224,24 @@ class EmployeeHandlers:
 
         async with async_session() as session:
             result = await session.execute(
-                select(Appointment).where(Appointment.id == appointment_id)
+                select(Appointment, User, Service, Employee).join(
+                    User, Appointment.user_id == User.id
+                ).join(
+                    Service, Appointment.service_id == Service.id
+                ).join(
+                    Employee, Appointment.employee_id == Employee.id
+                ).where(Appointment.id == appointment_id)
             )
-            appointment = result.scalars().first()
+            row = result.first()
 
-            if appointment:
+            if row:
+                appointment, user, service, employee = row
                 appointment.status = 'completed'
                 await session.commit()
+
+                # Отправляем уведомление
+                if self.scheduler:
+                    await self.scheduler.notify_appointment_completed(appointment, user, service, employee)
 
                 await query.edit_message_text(
                     "✅ Запись отмечена как выполненная!"
@@ -245,13 +256,24 @@ class EmployeeHandlers:
 
         async with async_session() as session:
             result = await session.execute(
-                select(Appointment).where(Appointment.id == appointment_id)
+                select(Appointment, User, Service, Employee).join(
+                    User, Appointment.user_id == User.id
+                ).join(
+                    Service, Appointment.service_id == Service.id
+                ).join(
+                    Employee, Appointment.employee_id == Employee.id
+                ).where(Appointment.id == appointment_id)
             )
-            appointment = result.scalars().first()
+            row = result.first()
 
-            if appointment:
+            if row:
+                appointment, user, service, employee = row
                 appointment.status = 'cancelled'
                 await session.commit()
+
+                # Отправляем уведомления
+                if self.scheduler:
+                    await self.scheduler.notify_appointment_cancelled(appointment, user, service, employee, 'employee')
 
                 await query.edit_message_text(
                     "❌ Запись отменена."
@@ -305,13 +327,24 @@ class EmployeeHandlers:
 
         async with async_session() as session:
             result = await session.execute(
-                select(Appointment).where(Appointment.id == appointment_id)
+                select(Appointment, User, Service, Employee).join(
+                    User, Appointment.user_id == User.id
+                ).join(
+                    Service, Appointment.service_id == Service.id
+                ).join(
+                    Employee, Appointment.employee_id == Employee.id
+                ).where(Appointment.id == appointment_id)
             )
-            appointment = result.scalars().first()
+            row = result.first()
 
-            if appointment:
+            if row:
+                appointment, user, service, employee = row
                 appointment.status = 'completed'
                 await session.commit()
+
+                # Отправляем уведомление
+                if self.scheduler:
+                    await self.scheduler.notify_appointment_completed(appointment, user, service, employee)
 
                 await query.edit_message_text(
                     "✅ Запись успешно отмечена как выполненная!"
@@ -688,13 +721,21 @@ class EmployeeHandlers:
 
         async with async_session() as session:
             result = await session.execute(
-                select(Appointment).where(Appointment.id == appointment_id)
+                select(Appointment, User, Service, Employee).join(
+                    User, Appointment.user_id == User.id
+                ).join(
+                    Service, Appointment.service_id == Service.id
+                ).join(
+                    Employee, Appointment.employee_id == Employee.id
+                ).where(Appointment.id == appointment_id)
             )
-            appointment = result.scalars().first()
+            row = result.first()
 
-            if not appointment:
+            if not row:
                 await update.message.reply_text("Ошибка: запись не найдена")
                 return ConversationHandler.END
+
+            appointment, user, service, employee = row
 
             try:
                 if field in ['дата', 'date', 'время', 'time']:
@@ -702,6 +743,11 @@ class EmployeeHandlers:
                     new_datetime = datetime.strptime(value, '%Y-%m-%d %H:%M')
                     appointment.appointment_date = new_datetime
                     await session.commit()
+
+                    # Отправляем уведомления
+                    if self.scheduler:
+                        await self.scheduler.notify_appointment_edited(appointment, user, service, employee, 'employee')
+
                     await update.message.reply_text(
                         f"✅ Дата и время изменены на: {new_datetime.strftime('%d.%m.%Y %H:%M')}"
                     )

@@ -412,13 +412,24 @@ class ClientHandlers:
 
         async with async_session() as session:
             result = await session.execute(
-                select(Appointment).where(Appointment.id == appointment_id)
+                select(Appointment, User, Service, Employee).join(
+                    User, Appointment.user_id == User.id
+                ).join(
+                    Service, Appointment.service_id == Service.id
+                ).join(
+                    Employee, Appointment.employee_id == Employee.id
+                ).where(Appointment.id == appointment_id)
             )
-            appointment = result.scalars().first()
+            row = result.first()
 
-            if appointment:
+            if row:
+                appointment, user, service, employee = row
                 appointment.status = 'cancelled'
                 await session.commit()
+
+                # Отправляем уведомления
+                if self.scheduler:
+                    await self.scheduler.notify_appointment_cancelled(appointment, user, service, employee, 'client')
 
                 await query.edit_message_text(
                     "✅ Запись успешно отменена."
