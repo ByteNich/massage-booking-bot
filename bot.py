@@ -219,6 +219,11 @@ class MassageBookingBot:
                     await self.admin_handlers.show_appointment_detail(update, context)
             elif data.startswith("admin_cancel_appointment_"):
                 await self.admin_handlers.cancel_appointment(update, context)
+            # Сброс статистики
+            elif data == "admin_reset_stats":
+                await self.admin_handlers.reset_stats_confirm(update, context)
+            elif data == "admin_confirm_reset_stats":
+                await self.admin_handlers.reset_stats_execute(update, context)
             # Обработка кнопок "Назад"
             elif data.startswith("admin_") and ("back" in data or data in ["admin_employees_menu", "admin_services_menu", "admin_list_employees", "admin_list_services", "admin_appointments_filter"]):
                 await self.admin_handlers.handle_back_button(update, context)

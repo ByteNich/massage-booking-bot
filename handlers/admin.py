@@ -38,10 +38,16 @@ class AdminHandlers:
     # Управление сотрудниками
     async def show_employees_menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Показать меню управления сотрудниками"""
-        await update.message.reply_text(
-            "Управление сотрудниками:",
-            reply_markup=AdminKeyboards.employees_menu()
-        )
+        query = update.callback_query
+        if query:
+            await query.answer()
+
+        text = "Управление сотрудниками:"
+        markup = AdminKeyboards.employees_menu()
+        if query:
+            await query.edit_message_text(text, reply_markup=markup)
+        else:
+            await update.message.reply_text(text, reply_markup=markup)
 
     async def show_employees_list(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Показать список сотрудников"""
@@ -140,10 +146,16 @@ class AdminHandlers:
     # Управление услугами
     async def show_services_menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Показать меню управления услугами"""
-        await update.message.reply_text(
-            "Управление услугами:",
-            reply_markup=AdminKeyboards.services_menu()
-        )
+        query = update.callback_query
+        if query:
+            await query.answer()
+
+        text = "Управление услугами:"
+        markup = AdminKeyboards.services_menu()
+        if query:
+            await query.edit_message_text(text, reply_markup=markup)
+        else:
+            await update.message.reply_text(text, reply_markup=markup)
 
     async def show_services_list(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Показать список услуг"""
@@ -226,10 +238,16 @@ class AdminHandlers:
     # Статистика
     async def show_statistics_menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Показать меню статистики"""
-        await update.message.reply_text(
-            "Выберите период для статистики:",
-            reply_markup=AdminKeyboards.statistics_menu()
-        )
+        query = update.callback_query
+        if query:
+            await query.answer()
+
+        text = "Выберите период для статистики:"
+        markup = AdminKeyboards.statistics_menu()
+        if query:
+            await query.edit_message_text(text, reply_markup=markup)
+        else:
+            await update.message.reply_text(text, reply_markup=markup)
 
     async def show_statistics(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Показать статистику"""
@@ -379,10 +397,16 @@ class AdminHandlers:
     # Управление записями
     async def show_appointments_filter(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Показать фильтр записей"""
-        await update.message.reply_text(
-            "Выберите период:",
-            reply_markup=AdminKeyboards.all_appointments_filter()
-        )
+        query = update.callback_query
+        if query:
+            await query.answer()
+
+        text = "Выберите период:"
+        markup = AdminKeyboards.all_appointments_filter()
+        if query:
+            await query.edit_message_text(text, reply_markup=markup)
+        else:
+            await update.message.reply_text(text, reply_markup=markup)
 
     async def show_filtered_appointments(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Показать отфильтрованные записи"""
@@ -506,6 +530,10 @@ class AdminHandlers:
 
     async def show_salon_info(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Показать информацию о салоне"""
+        query = update.callback_query
+        if query:
+            await query.answer()
+
         info = (
             f"🏢 Салон красоты «{config.SALON_INFO['name']}»\n\n"
             f"📍 Адрес:\n{config.SALON_INFO['address']}\n\n"
@@ -513,7 +541,11 @@ class AdminHandlers:
             f"🕐 Режим работы:\n{config.SALON_INFO['schedule']}"
         )
 
-        await update.message.reply_text(info, reply_markup=AdminKeyboards.main_menu())
+        markup = AdminKeyboards.main_menu()
+        if query:
+            await query.edit_message_text(info, reply_markup=markup)
+        else:
+            await update.message.reply_text(info, reply_markup=markup)
 
     # Редактирование сотрудника
     async def start_edit_employee(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -974,3 +1006,51 @@ class AdminHandlers:
 
         await query.edit_message_text("❌ Рассылка отменена.")
         return ConversationHandler.END
+
+    # === СБРОС СТАТИСТИКИ ===
+
+    async def reset_stats_confirm(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Подтверждение сброса статистики"""
+        query = update.callback_query
+        await query.answer()
+
+        await query.edit_message_text(
+            "⚠️ ВНИМАНИЕ!\n\n"
+            "Вы уверены, что хотите сбросить всю статистику?\n\n"
+            "Будут удалены:\n"
+            "• Все выполненные записи\n"
+            "• Все отмененные записи\n"
+            "• История клиентов (но сами клиенты останутся)\n\n"
+            "Активные записи НЕ будут удалены.\n\n"
+            "⚠️ Это действие НЕОБРАТИМО!",
+            reply_markup=AdminKeyboards.confirm_reset_stats()
+        )
+
+    async def reset_stats_execute(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Выполнить сброс статистики"""
+        query = update.callback_query
+        await query.answer()
+
+        await query.edit_message_text("🔄 Выполняется сброс статистики...")
+
+        async with async_session() as session:
+            # Удаляем все завершенные и отмененные записи
+            result = await session.execute(
+                select(Appointment).where(
+                    Appointment.status.in_(['completed', 'cancelled'])
+                )
+            )
+            appointments_to_delete = result.scalars().all()
+            count_deleted = len(appointments_to_delete)
+
+            for appointment in appointments_to_delete:
+                await session.delete(appointment)
+
+            await session.commit()
+
+        await query.edit_message_text(
+            f"✅ Статистика успешно сброшена!\n\n"
+            f"Удалено записей: {count_deleted}\n\n"
+            f"Активные записи сохранены.",
+            reply_markup=AdminKeyboards.statistics_menu()
+        )

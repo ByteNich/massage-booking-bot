@@ -123,6 +123,10 @@ class EmployeeHandlers:
 
     async def show_week_schedule(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Показать расписание на неделю"""
+        query = update.callback_query
+        if query:
+            await query.answer()
+
         user_id = update.effective_user.id
 
         # Генерируем даты на следующие 7 дней
@@ -132,10 +136,12 @@ class EmployeeHandlers:
             if date.weekday() in config.WORK_DAYS:
                 available_dates.append(date)
 
-        await update.message.reply_text(
-            "Выберите дату для просмотра расписания:",
-            reply_markup=EmployeeKeyboards.select_date_for_schedule(available_dates)
-        )
+        text = "Выберите дату для просмотра расписания:"
+        markup = EmployeeKeyboards.select_date_for_schedule(available_dates)
+        if query:
+            await query.edit_message_text(text, reply_markup=markup)
+        else:
+            await update.message.reply_text(text, reply_markup=markup)
 
     async def show_date_schedule(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Показать расписание на выбранную дату"""
@@ -306,6 +312,10 @@ class EmployeeHandlers:
 
     async def show_appointments_for_completion(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Показать записи для отметки выполнения"""
+        query = update.callback_query
+        if query:
+            await query.answer()
+
         user_id = update.effective_user.id
 
         async with async_session() as session:
@@ -316,7 +326,11 @@ class EmployeeHandlers:
             employee = result.scalars().first()
 
             if not employee:
-                await update.message.reply_text("Ошибка: сотрудник не найден.")
+                text = "Ошибка: сотрудник не найден."
+                if query:
+                    await query.edit_message_text(text)
+                else:
+                    await update.message.reply_text(text)
                 return
 
             # Получаем записи за последние 3 дня
@@ -332,16 +346,20 @@ class EmployeeHandlers:
             appointments = result.scalars().all()
 
             if not appointments:
-                await update.message.reply_text(
-                    "Нет записей для отметки выполнения.",
-                    reply_markup=EmployeeKeyboards.main_menu()
-                )
+                text = "Нет записей для отметки выполнения."
+                markup = EmployeeKeyboards.main_menu()
+                if query:
+                    await query.edit_message_text(text, reply_markup=markup)
+                else:
+                    await update.message.reply_text(text, reply_markup=markup)
                 return
 
-            await update.message.reply_text(
-                "Выберите запись для отметки выполнения:",
-                reply_markup=EmployeeKeyboards.appointments_for_completion(appointments)
-            )
+            text = "Выберите запись для отметки выполнения:"
+            markup = EmployeeKeyboards.appointments_for_completion(appointments)
+            if query:
+                await query.edit_message_text(text, reply_markup=markup)
+            else:
+                await update.message.reply_text(text, reply_markup=markup)
 
     async def mark_complete(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Отметить как выполненное (из списка)"""
@@ -377,6 +395,10 @@ class EmployeeHandlers:
 
     async def show_salon_info(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Показать информацию о салоне"""
+        query = update.callback_query
+        if query:
+            await query.answer()
+
         info = (
             f"🏢 Салон красоты «{config.SALON_INFO['name']}»\n\n"
             f"📍 Адрес:\n{config.SALON_INFO['address']}\n\n"
@@ -384,12 +406,20 @@ class EmployeeHandlers:
             f"🕐 Режим работы:\n{config.SALON_INFO['schedule']}"
         )
 
-        await update.message.reply_text(info, reply_markup=EmployeeKeyboards.main_menu())
+        markup = EmployeeKeyboards.main_menu()
+        if query:
+            await query.edit_message_text(info, reply_markup=markup)
+        else:
+            await update.message.reply_text(info, reply_markup=markup)
 
     # === ДОБАВЛЕНИЕ НОВОЙ ЗАПИСИ ===
 
     async def start_new_appointment(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Начать процесс создания новой записи"""
+        query = update.callback_query
+        if query:
+            await query.answer()
+
         user_id = update.effective_user.id
 
         async with async_session() as session:
@@ -400,7 +430,11 @@ class EmployeeHandlers:
             employee = result.scalars().first()
 
             if not employee:
-                await update.message.reply_text("Ошибка: вы не являетесь сотрудником.")
+                text = "Ошибка: вы не являетесь сотрудником."
+                if query:
+                    await query.edit_message_text(text)
+                else:
+                    await update.message.reply_text(text)
                 return ConversationHandler.END
 
             # Сохраняем ID сотрудника
@@ -412,11 +446,12 @@ class EmployeeHandlers:
             )
             services = result.scalars().all()
 
-            await update.message.reply_text(
-                "➕ Создание новой записи\n\n"
-                "Шаг 1: Выберите услугу:",
-                reply_markup=EmployeeKeyboards.services_list(services)
-            )
+            text = "➕ Создание новой записи\n\n" + "Шаг 1: Выберите услугу:"
+            markup = EmployeeKeyboards.services_list(services)
+            if query:
+                await query.edit_message_text(text, reply_markup=markup)
+            else:
+                await update.message.reply_text(text, reply_markup=markup)
 
         return EMP_SELECTING_SERVICE
 

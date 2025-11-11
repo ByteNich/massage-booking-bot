@@ -95,6 +95,7 @@ class AdminKeyboards:
             [InlineKeyboardButton("📅 За сегодня", callback_data="admin_stats_today")],
             [InlineKeyboardButton("📆 За неделю", callback_data="admin_stats_week")],
             [InlineKeyboardButton("📊 За месяц", callback_data="admin_stats_month")],
+            [InlineKeyboardButton("🗑 Сбросить статистику", callback_data="admin_reset_stats")],
             [InlineKeyboardButton("◀️ Назад", callback_data="admin_back_to_main")],
         ]
         return InlineKeyboardMarkup(keyboard)
@@ -153,5 +154,14 @@ class AdminKeyboards:
             [InlineKeyboardButton("🗑 Удалить фото", callback_data="admin_broadcast_remove_photo")],
             [InlineKeyboardButton("✏️ Изменить текст", callback_data="admin_broadcast_edit_text")],
             [InlineKeyboardButton("❌ Отменить", callback_data="admin_broadcast_cancel")],
+        ]
+        return InlineKeyboardMarkup(keyboard)
+
+    @staticmethod
+    def confirm_reset_stats():
+        """Подтверждение сброса статистики"""
+        keyboard = [
+            [InlineKeyboardButton("⚠️ Да, сбросить все данные", callback_data="admin_confirm_reset_stats")],
+            [InlineKeyboardButton("❌ Отмена", callback_data="admin_stats")],
         ]
         return InlineKeyboardMarkup(keyboard)

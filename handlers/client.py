@@ -69,22 +69,32 @@ class ClientHandlers:
 
         await update.message.reply_text(
             "Спасибо! Ваш номер телефона сохранён.\n\n"
-            "Теперь вы можете пользоваться всеми функциями бота.",
+            f"Добро пожаловать в салон красоты «{config.SALON_INFO['name']}»! 💆‍♀️",
             reply_markup=ClientKeyboards.main_menu()
         )
 
     async def show_services(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Показать категории услуг"""
+        query = update.callback_query
+        if query:
+            await query.answer()
+
         async with async_session() as session:
             result = await session.execute(
                 select(Service.category).distinct().where(Service.is_active == True)
             )
             categories = [row[0] for row in result.all()]
 
-        await update.message.reply_text(
-            "Выберите категорию услуг:",
-            reply_markup=ClientKeyboards.services_categories(categories)
-        )
+        if query:
+            await query.edit_message_text(
+                "Выберите категорию услуг:",
+                reply_markup=ClientKeyboards.services_categories(categories)
+            )
+        else:
+            await update.message.reply_text(
+                "Выберите категорию услуг:",
+                reply_markup=ClientKeyboards.services_categories(categories)
+            )
 
     async def show_category_services(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Показать услуги категории"""
@@ -352,6 +362,10 @@ class ClientHandlers:
 
     async def show_my_appointments(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Показать записи пользователя"""
+        query = update.callback_query
+        if query:
+            await query.answer()
+
         user_id = update.effective_user.id
 
         async with async_session() as session:
@@ -370,16 +384,19 @@ class ClientHandlers:
             appointments = result.scalars().all()
 
             if not appointments:
-                await update.message.reply_text(
-                    "У вас нет активных записей.",
-                    reply_markup=ClientKeyboards.main_menu()
-                )
+                text = "У вас нет активных записей."
+                if query:
+                    await query.edit_message_text(text)
+                else:
+                    await update.message.reply_text(text)
                 return
 
-            await update.message.reply_text(
-                "Ваши записи:",
-                reply_markup=ClientKeyboards.my_appointments(appointments)
-            )
+            text = "Ваши записи:"
+            markup = ClientKeyboards.my_appointments(appointments)
+            if query:
+                await query.edit_message_text(text, reply_markup=markup)
+            else:
+                await update.message.reply_text(text, reply_markup=markup)
 
     async def show_appointment_detail(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Показать детали записи"""
@@ -478,7 +495,7 @@ class ClientHandlers:
 
         if data == "client_booking":
             # Показываем категории услуг
-            await self.show_service_categories(update, context)
+            await self.show_services(update, context)
         elif data == "client_my_appointments":
             # Показываем записи клиента
             await self.show_my_appointments(update, context)
