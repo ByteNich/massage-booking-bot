@@ -1,4 +1,5 @@
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, KeyboardButton
+from utils.helpers import format_date_russian
 
 
 class ClientKeyboards:
@@ -6,14 +7,13 @@ class ClientKeyboards:
 
     @staticmethod
     def main_menu():
-        """Главное меню клиента"""
+        """Главное меню клиента (inline)"""
         keyboard = [
-            [KeyboardButton("📋 Наши услуги")],
-            [KeyboardButton("📅 Записаться на процедуру")],
-            [KeyboardButton("📝 Мои записи")],
-            [KeyboardButton("ℹ️ О салоне"), KeyboardButton("📞 Контакты")],
+            [InlineKeyboardButton("📅 Записаться на процедуру", callback_data="client_booking")],
+            [InlineKeyboardButton("📝 Мои записи", callback_data="client_my_appointments")],
+            [InlineKeyboardButton("ℹ️ Информация о салоне", callback_data="client_info")],
         ]
-        return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+        return InlineKeyboardMarkup(keyboard)
 
     @staticmethod
     def services_categories(categories: list):
@@ -52,7 +52,7 @@ class ClientKeyboards:
         """Выбор даты"""
         keyboard = []
         for date in available_dates:
-            date_str = date.strftime('%d.%m.%Y (%A)')
+            date_str = format_date_russian(date, include_weekday=True)
             keyboard.append([
                 InlineKeyboardButton(date_str, callback_data=f"date_{date.strftime('%Y-%m-%d')}")
             ])
@@ -111,3 +111,12 @@ class ClientKeyboards:
             [KeyboardButton("📱 Отправить номер телефона", request_contact=True)],
         ]
         return ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=True)
+
+    @staticmethod
+    def salon_info_with_map():
+        """Информация о салоне с картой"""
+        keyboard = [
+            [InlineKeyboardButton("📍 Открыть в Яндекс.Картах", url="https://yandex.ru/maps/-/CLCOeWmw")],
+            [InlineKeyboardButton("◀️ Назад", callback_data="back_to_main")],
+        ]
+        return InlineKeyboardMarkup(keyboard)

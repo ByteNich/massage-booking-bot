@@ -1,11 +1,11 @@
 from datetime import datetime, timedelta
 from telegram import Update
 from telegram.ext import ContextTypes, ConversationHandler
-from sqlalchemy import select
+from sqlalchemy import select, func
 from database.models import User, Service, Appointment, Employee
 from database.database import async_session
 from keyboards.client import ClientKeyboards
-from utils.helpers import get_or_create_user, format_service_info, format_appointment_info, get_available_time_slots
+from utils.helpers import get_or_create_user, format_service_info, format_appointment_info, get_available_time_slots, format_datetime_russian
 import config
 
 # States для ConversationHandler
@@ -320,12 +320,20 @@ class ClientHandlers:
             # Отправляем уведомление
             await self.scheduler.notify_new_appointment(appointment, user, service, employee)
 
+            # Форматируем дату на русском
+            formatted_date = format_datetime_russian(appointment_datetime)
+
         # Очищаем данные о записи
         del self.booking_data[user_id]
 
         await query.edit_message_text(
-            "✅ Отлично! Ваша запись успешно создана!\n\n"
-            "Мы отправим вам напоминание за 24 часа и за 3 часа до визита."
+            f"✅ Отлично! Ваша запись успешно создана!\n\n"
+            f"📅 {formatted_date}\n"
+            f"💆 {service.name}\n"
+            f"💰 {service.price} ₽\n"
+            f"⏱ Длительность: {service.duration} мин\n"
+            f"👤 Мастер: {employee.name}\n\n"
+            f"Мы отправим вам напоминание за 24 часа и за 3 часа до визита."
         )
 
         return ConversationHandler.END
@@ -436,26 +444,47 @@ class ClientHandlers:
                 )
 
     async def show_salon_info(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Показать информацию о салоне"""
+        """Показать информацию о салоне (объединённую)"""
+        query = update.callback_query
+        if query:
+            await query.answer()
+
+        # Краткий адрес
+        short_address = "Советская ул., 12, этаж 4, офис 436"
+
         info = (
             f"🏢 Салон красоты «{config.SALON_INFO['name']}»\n\n"
-            f"📍 Адрес:\n{config.SALON_INFO['address']}\n\n"
+            f"📍 Адрес:\n{short_address}\n\n"
             f"📞 Телефон: {config.SALON_INFO['phone']}\n\n"
             f"🕐 Режим работы:\n{config.SALON_INFO['schedule']}"
         )
 
-        await update.message.reply_text(info, reply_markup=ClientKeyboards.main_menu())
+        if query:
+            await query.edit_message_text(
+                info,
+                reply_markup=ClientKeyboards.salon_info_with_map()
+            )
+        else:
+            await update.message.reply_text(
+                info,
+                reply_markup=ClientKeyboards.salon_info_with_map()
+            )
 
-    async def show_contacts(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Показать контакты"""
-        contacts = (
-            f"📞 Контакты салона «{config.SALON_INFO['name']}»\n\n"
-            f"Телефон: {config.SALON_INFO['phone']}\n\n"
-            f"Адрес:\n{config.SALON_INFO['address']}\n\n"
-            f"Режим работы:\n{config.SALON_INFO['schedule']}"
-        )
+    async def handle_main_menu_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Обработка callback'ов главного меню"""
+        query = update.callback_query
+        await query.answer()
+        data = query.data
 
-        await update.message.reply_text(contacts, reply_markup=ClientKeyboards.main_menu())
+        if data == "client_booking":
+            # Показываем категории услуг
+            await self.show_service_categories(update, context)
+        elif data == "client_my_appointments":
+            # Показываем записи клиента
+            await self.show_my_appointments(update, context)
+        elif data == "client_info":
+            # Показываем информацию о салоне
+            await self.show_salon_info(update, context)
 
     async def handle_back_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Универсальный обработчик кнопки Назад для клиентов"""

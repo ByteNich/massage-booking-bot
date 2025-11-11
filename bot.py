@@ -120,16 +120,9 @@ class MassageBookingBot:
                 await self.client_handlers.show_salon_info(update, context)
             return
 
-        # Клиент
+        # Клиент (теперь использует inline кнопки, текстовые сообщения не нужны)
         if role == config.ROLE_CLIENT:
-            if text == "📋 Наши услуги":
-                await self.client_handlers.show_services(update, context)
-            elif text == "📅 Записаться на процедуру":
-                await self.client_handlers.show_services(update, context)
-            elif text == "📝 Мои записи":
-                await self.client_handlers.show_my_appointments(update, context)
-            elif text == "📞 Контакты":
-                await self.client_handlers.show_contacts(update, context)
+            pass  # Все действия через inline кнопки
 
         # Сотрудник
         elif role == config.ROLE_EMPLOYEE:
@@ -162,10 +155,15 @@ class MassageBookingBot:
 
         # Клиент (обработка НЕ-ConversationHandler callbacks)
         if role == config.ROLE_CLIENT:
-            if data.startswith("category_"):
+            # Главное меню
+            if data in ["client_booking", "client_my_appointments", "client_info"]:
+                await self.client_handlers.handle_main_menu_callback(update, context)
+            # Навигация по услугам
+            elif data.startswith("category_"):
                 await self.client_handlers.show_category_services(update, context)
             elif data.startswith("service_") and not data.startswith("service_actions"):
                 await self.client_handlers.show_service_detail(update, context)
+            # Мои записи
             elif data.startswith("appointment_") and not data.startswith("cancel_appointment_"):
                 await self.client_handlers.show_appointment_detail(update, context)
             elif data.startswith("cancel_appointment_"):

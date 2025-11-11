@@ -4,6 +4,61 @@ from database.models import User, Appointment, Service, Employee
 import config
 
 
+# Русификация дней недели и месяцев
+RUSSIAN_WEEKDAYS = {
+    0: 'Пн',
+    1: 'Вт',
+    2: 'Ср',
+    3: 'Чт',
+    4: 'Пт',
+    5: 'Сб',
+    6: 'Вс'
+}
+
+RUSSIAN_WEEKDAYS_FULL = {
+    0: 'Понедельник',
+    1: 'Вторник',
+    2: 'Среда',
+    3: 'Четверг',
+    4: 'Пятница',
+    5: 'Суббота',
+    6: 'Воскресенье'
+}
+
+RUSSIAN_MONTHS = {
+    1: 'января',
+    2: 'февраля',
+    3: 'марта',
+    4: 'апреля',
+    5: 'мая',
+    6: 'июня',
+    7: 'июля',
+    8: 'августа',
+    9: 'сентября',
+    10: 'октября',
+    11: 'ноября',
+    12: 'декабря'
+}
+
+
+def format_date_russian(date: datetime, include_weekday: bool = True) -> str:
+    """Форматирование даты на русском языке"""
+    day = date.day
+    month = RUSSIAN_MONTHS[date.month]
+    weekday = RUSSIAN_WEEKDAYS[date.weekday()]
+
+    if include_weekday:
+        return f"{weekday}, {day} {month}"
+    return f"{day} {month}"
+
+
+def format_datetime_russian(dt: datetime) -> str:
+    """Форматирование даты и времени на русском языке"""
+    date_part = format_date_russian(dt, include_weekday=True)
+    time_part = dt.strftime('%H:%M')
+    return f"{date_part} в {time_part}"
+
+
 async def get_user_role(telegram_id: int, session) -> str:
     """Получить роль пользователя"""
     if telegram_id == config.ADMIN_ID:
