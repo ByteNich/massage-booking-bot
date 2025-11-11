@@ -19,7 +19,7 @@ import config
 from database.database import init_db, async_session
 from database.models import Employee, User
 from handlers.client import ClientHandlers, SELECTING_SERVICE, SELECTING_DATE, SELECTING_TIME, CONFIRMING_BOOKING
-from handlers.employee import EmployeeHandlers
+from handlers.employee import EmployeeHandlers, EMP_SELECTING_SERVICE, EMP_ENTERING_PHONE, EMP_SELECTING_DATE, EMP_SELECTING_TIME, EMP_CONFIRMING, EMP_EDITING
 from handlers.admin import AdminHandlers, EDITING_EMPLOYEE, EDITING_SERVICE
 from utils.scheduler import NotificationScheduler
 from utils.helpers import get_user_role
@@ -139,6 +139,7 @@ class MassageBookingBot:
                 await self.employee_handlers.show_week_schedule(update, context)
             elif text == "✅ Отметить выполнение":
                 await self.employee_handlers.show_appointments_for_completion(update, context)
+            # "➕ Добавить запись" обрабатывается ConversationHandler
 
         # Администратор
         elif role == config.ROLE_ADMIN:
@@ -185,6 +186,8 @@ class MassageBookingBot:
                 await self.employee_handlers.cancel_appointment(update, context)
             elif data.startswith("emp_mark_complete_"):
                 await self.employee_handlers.mark_complete(update, context)
+            elif data in ["emp_back_to_main", "emp_back_to_list"]:
+                await self.employee_handlers.handle_back_button(update, context)
 
         # Администратор
         elif role == config.ROLE_ADMIN:
@@ -224,12 +227,13 @@ class MassageBookingBot:
 
         # Инициализация обработчиков
         self.client_handlers = ClientHandlers(None)  # scheduler будет установлен позже
-        self.employee_handlers = EmployeeHandlers()
+        self.employee_handlers = EmployeeHandlers(None)  # scheduler будет установлен позже
         self.admin_handlers = AdminHandlers()
 
-        # Устанавливаем scheduler в client_handlers после инициализации
+        # Устанавливаем scheduler после инициализации
         async def set_scheduler():
             self.client_handlers.scheduler = self.scheduler
+            self.employee_handlers.scheduler = self.scheduler
 
         self.application.job_queue.run_once(lambda _: asyncio.create_task(set_scheduler()), 1)
 
@@ -294,9 +298,64 @@ class MassageBookingBot:
             fallbacks=[CommandHandler("cancel", self.admin_handlers.process_service_edit)],
         )
 
+        # ConversationHandler для создания записи сотрудником
+        emp_new_appointment_handler = ConversationHandler(
+            entry_points=[
+                MessageHandler(
+                    filters.TEXT & filters.Regex('^➕ Добавить запись$'),
+                    self.employee_handlers.start_new_appointment
+                ),
+            ],
+            states={
+                EMP_SELECTING_SERVICE: [
+                    CallbackQueryHandler(self.employee_handlers.select_service_for_new, pattern="^emp_service_"),
+                    CallbackQueryHandler(self.employee_handlers.cancel_new_appointment, pattern="^emp_cancel_new$"),
+                ],
+                EMP_ENTERING_PHONE: [
+                    MessageHandler(filters.TEXT & ~filters.COMMAND, self.employee_handlers.enter_client_phone),
+                ],
+                EMP_SELECTING_DATE: [
+                    CallbackQueryHandler(self.employee_handlers.select_date_for_new, pattern="^emp_new_date_"),
+                    CallbackQueryHandler(self.employee_handlers.cancel_new_appointment, pattern="^emp_cancel_new$"),
+                ],
+                EMP_SELECTING_TIME: [
+                    CallbackQueryHandler(self.employee_handlers.select_time_for_new, pattern="^emp_new_time_"),
+                    CallbackQueryHandler(self.employee_handlers.back_to_date_selection, pattern="^emp_back_to_date$"),
+                    CallbackQueryHandler(self.employee_handlers.cancel_new_appointment, pattern="^emp_cancel_new$"),
+                ],
+                EMP_CONFIRMING: [
+                    CallbackQueryHandler(self.employee_handlers.confirm_new_appointment, pattern="^emp_confirm_new$"),
+                    CallbackQueryHandler(self.employee_handlers.cancel_new_appointment, pattern="^emp_cancel_new$"),
+                ],
+            },
+            fallbacks=[
+                CallbackQueryHandler(self.employee_handlers.cancel_new_appointment, pattern="^emp_cancel_new$"),
+            ],
+        )
+
+        # ConversationHandler для редактирования записи сотрудником
+        emp_edit_appointment_handler = ConversationHandler(
+            entry_points=[
+                CallbackQueryHandler(
+                    self.employee_handlers.start_edit_appointment,
+                    pattern="^emp_edit_"
+                )
+            ],
+            states={
+                EMP_EDITING: [
+                    MessageHandler(filters.TEXT & ~filters.COMMAND, self.employee_handlers.process_appointment_edit),
+                    CommandHandler("done", self.employee_handlers.process_appointment_edit),
+                    CommandHandler("cancel", self.employee_handlers.process_appointment_edit),
+                ]
+            },
+            fallbacks=[CommandHandler("cancel", self.employee_handlers.process_appointment_edit)],
+        )
+
         self.application.add_handler(booking_handler)
         self.application.add_handler(edit_employee_handler)
         self.application.add_handler(edit_service_handler)
+        self.application.add_handler(emp_new_appointment_handler)
+        self.application.add_handler(emp_edit_appointment_handler)
         self.application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.route_message))
         self.application.add_handler(CallbackQueryHandler(self.route_callback))
 
