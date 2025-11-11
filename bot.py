@@ -20,7 +20,7 @@ from database.database import init_db, async_session
 from database.models import Employee, User
 from handlers.client import ClientHandlers, SELECTING_SERVICE, SELECTING_DATE, SELECTING_TIME, CONFIRMING_BOOKING
 from handlers.employee import EmployeeHandlers
-from handlers.admin import AdminHandlers
+from handlers.admin import AdminHandlers, EDITING_EMPLOYEE, EDITING_SERVICE
 from utils.scheduler import NotificationScheduler
 from utils.helpers import get_user_role
 from sqlalchemy import select
@@ -196,13 +196,17 @@ class MassageBookingBot:
         elif role == config.ROLE_ADMIN:
             if data == "admin_list_employees":
                 await self.admin_handlers.show_employees_list(update, context)
-            elif data.startswith("admin_employee_"):
+            elif data.startswith("admin_edit_employee_"):
+                await self.admin_handlers.start_edit_employee(update, context)
+            elif data.startswith("admin_employee_") and "toggle" not in data and "edit" not in data:
                 await self.admin_handlers.show_employee_detail(update, context)
             elif data.startswith("admin_toggle_employee_"):
                 await self.admin_handlers.toggle_employee_status(update, context)
             elif data == "admin_list_services":
                 await self.admin_handlers.show_services_list(update, context)
-            elif data.startswith("admin_service_"):
+            elif data.startswith("admin_edit_service_"):
+                await self.admin_handlers.start_edit_service(update, context)
+            elif data.startswith("admin_service_") and "toggle" not in data and "edit" not in data:
                 await self.admin_handlers.show_service_detail(update, context)
             elif data.startswith("admin_toggle_service_"):
                 await self.admin_handlers.toggle_service_status(update, context)
@@ -215,6 +219,9 @@ class MassageBookingBot:
                     await self.admin_handlers.show_appointment_detail(update, context)
             elif data.startswith("admin_cancel_appointment_"):
                 await self.admin_handlers.cancel_appointment(update, context)
+            # Обработка кнопок "Назад"
+            elif data.startswith("admin_") and ("back" in data or data in ["admin_employees_menu", "admin_services_menu", "admin_list_employees", "admin_list_services", "admin_appointments_filter"]):
+                await self.admin_handlers.handle_back_button(update, context)
 
     def run(self):
         """Запуск бота"""
@@ -235,6 +242,42 @@ class MassageBookingBot:
         # Регистрация обработчиков
         self.application.add_handler(CommandHandler("start", self.route_start_command))
         self.application.add_handler(MessageHandler(filters.CONTACT, self.client_handlers.handle_contact))
+
+        # ConversationHandler для редактирования сотрудников
+        edit_employee_handler = ConversationHandler(
+            entry_points=[CallbackQueryHandler(
+                self.admin_handlers.start_edit_employee,
+                pattern="^admin_edit_employee_"
+            )],
+            states={
+                EDITING_EMPLOYEE: [
+                    MessageHandler(filters.PHOTO, self.admin_handlers.process_employee_edit),
+                    MessageHandler(filters.TEXT & ~filters.COMMAND, self.admin_handlers.process_employee_edit),
+                    CommandHandler("done", self.admin_handlers.process_employee_edit),
+                    CommandHandler("cancel", self.admin_handlers.process_employee_edit),
+                ]
+            },
+            fallbacks=[CommandHandler("cancel", self.admin_handlers.process_employee_edit)],
+        )
+
+        # ConversationHandler для редактирования услуг
+        edit_service_handler = ConversationHandler(
+            entry_points=[CallbackQueryHandler(
+                self.admin_handlers.start_edit_service,
+                pattern="^admin_edit_service_"
+            )],
+            states={
+                EDITING_SERVICE: [
+                    MessageHandler(filters.TEXT & ~filters.COMMAND, self.admin_handlers.process_service_edit),
+                    CommandHandler("done", self.admin_handlers.process_service_edit),
+                    CommandHandler("cancel", self.admin_handlers.process_service_edit),
+                ]
+            },
+            fallbacks=[CommandHandler("cancel", self.admin_handlers.process_service_edit)],
+        )
+
+        self.application.add_handler(edit_employee_handler)
+        self.application.add_handler(edit_service_handler)
         self.application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.route_message))
         self.application.add_handler(CallbackQueryHandler(self.route_callback))
 

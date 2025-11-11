@@ -31,6 +31,7 @@ class Employee(Base):
     user_id = Column(Integer, ForeignKey('users.id'), unique=True)
     name = Column(String(255), nullable=False)
     description = Column(Text, nullable=True)
+    photo_file_id = Column(String(255), nullable=True)  # Telegram file_id фото
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.now)
 

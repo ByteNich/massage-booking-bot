@@ -85,13 +85,32 @@ class AdminHandlers:
             info = (
                 f"👤 {employee.name}\n\n"
                 f"Статус: {status}\n"
-                f"Описание: {employee.description or 'не указано'}"
+                f"Описание: {employee.description or 'не указано'}\n"
+                f"Фото: {'загружено ✅' if employee.photo_file_id else 'не загружено ❌'}"
             )
 
-            await query.edit_message_text(
-                info,
-                reply_markup=AdminKeyboards.employee_actions(employee_id, employee.is_active)
-            )
+            # Если есть фото, отправляем его отдельно
+            if employee.photo_file_id:
+                try:
+                    # Удаляем старое сообщение
+                    await query.message.delete()
+                    # Отправляем фото с информацией
+                    await query.message.reply_photo(
+                        photo=employee.photo_file_id,
+                        caption=info,
+                        reply_markup=AdminKeyboards.employee_actions(employee_id, employee.is_active)
+                    )
+                except Exception as e:
+                    # Если не получилось отправить фото, отправляем текст
+                    await query.message.reply_text(
+                        info + "\n\n⚠️ Ошибка загрузки фото",
+                        reply_markup=AdminKeyboards.employee_actions(employee_id, employee.is_active)
+                    )
+            else:
+                await query.edit_message_text(
+                    info,
+                    reply_markup=AdminKeyboards.employee_actions(employee_id, employee.is_active)
+                )
 
     async def toggle_employee_status(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Изменить статус сотрудника"""
@@ -438,3 +457,294 @@ class AdminHandlers:
         )
 
         await update.message.reply_text(info, reply_markup=AdminKeyboards.main_menu())
+
+    # Редактирование сотрудника
+    async def start_edit_employee(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Начать редактирование сотрудника"""
+        query = update.callback_query
+        await query.answer()
+
+        employee_id = int(query.data.split('_')[3])
+        context.user_data['editing_employee_id'] = employee_id
+
+        async with async_session() as session:
+            result = await session.execute(
+                select(Employee).where(Employee.id == employee_id)
+            )
+            employee = result.scalars().first()
+
+            if not employee:
+                await query.edit_message_text("Сотрудник не найден.")
+                return
+
+            await query.edit_message_text(
+                f"📝 Редактирование сотрудника: {employee.name}\n\n"
+                f"Текущие данные:\n"
+                f"Имя: {employee.name}\n"
+                f"Описание: {employee.description or 'не указано'}\n"
+                f"Фото: {'загружено' if employee.photo_file_id else 'не загружено'}\n\n"
+                f"Что хотите изменить?\n\n"
+                f"Отправьте:\n"
+                f"• имя: Новое Имя\n"
+                f"• описание: Новое описание\n"
+                f"• фото: (отправьте фото)\n"
+                f"• отмена - для отмены"
+            )
+
+        return EDITING_EMPLOYEE
+
+    async def process_employee_edit(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Обработка редактирования сотрудника"""
+        employee_id = context.user_data.get('editing_employee_id')
+
+        if not employee_id:
+            await update.message.reply_text("Ошибка: сотрудник не выбран")
+            return ConversationHandler.END
+
+        # Обработка фото
+        if update.message.photo:
+            photo = update.message.photo[-1]  # Берем самое большое фото
+
+            async with async_session() as session:
+                result = await session.execute(
+                    select(Employee).where(Employee.id == employee_id)
+                )
+                employee = result.scalars().first()
+
+                if employee:
+                    employee.photo_file_id = photo.file_id
+                    await session.commit()
+
+                    await update.message.reply_text(
+                        "✅ Фото сотрудника обновлено!\n\n"
+                        "Отправьте еще изменения или /done для завершения"
+                    )
+            return EDITING_EMPLOYEE
+
+        text = update.message.text
+
+        if text.lower() == 'отмена' or text.lower() == '/cancel':
+            await update.message.reply_text("Редактирование отменено")
+            context.user_data.pop('editing_employee_id', None)
+            return ConversationHandler.END
+
+        if text.lower() == '/done':
+            await update.message.reply_text("✅ Редактирование завершено")
+            context.user_data.pop('editing_employee_id', None)
+            return ConversationHandler.END
+
+        # Парсинг команды
+        if ':' not in text:
+            await update.message.reply_text(
+                "❌ Неверный формат!\n\n"
+                "Используйте:\n"
+                "имя: Новое Имя\n"
+                "описание: Новое описание"
+            )
+            return EDITING_EMPLOYEE
+
+        field, value = text.split(':', 1)
+        field = field.strip().lower()
+        value = value.strip()
+
+        async with async_session() as session:
+            result = await session.execute(
+                select(Employee).where(Employee.id == employee_id)
+            )
+            employee = result.scalars().first()
+
+            if not employee:
+                await update.message.reply_text("Ошибка: сотрудник не найден")
+                return ConversationHandler.END
+
+            if field == 'имя' or field == 'name':
+                employee.name = value
+                await session.commit()
+                await update.message.reply_text(f"✅ Имя изменено на: {value}")
+            elif field == 'описание' or field == 'description':
+                employee.description = value
+                await session.commit()
+                await update.message.reply_text(f"✅ Описание изменено")
+            else:
+                await update.message.reply_text(
+                    f"❌ Неизвестное поле: {field}\n"
+                    f"Доступные поля: имя, описание"
+                )
+
+        await update.message.reply_text("Отправьте еще изменения или /done для завершения")
+        return EDITING_EMPLOYEE
+
+    # Редактирование услуги
+    async def start_edit_service(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Начать редактирование услуги"""
+        query = update.callback_query
+        await query.answer()
+
+        service_id = int(query.data.split('_')[3])
+        context.user_data['editing_service_id'] = service_id
+
+        async with async_session() as session:
+            result = await session.execute(
+                select(Service).where(Service.id == service_id)
+            )
+            service = result.scalars().first()
+
+            if not service:
+                await query.edit_message_text("Услуга не найдена.")
+                return
+
+            await query.edit_message_text(
+                f"📝 Редактирование услуги: {service.name}\n\n"
+                f"Текущие данные:\n"
+                f"Название: {service.name}\n"
+                f"Цена: {service.price} ₽\n"
+                f"Длительность: {service.duration} мин\n"
+                f"Категория: {service.category}\n"
+                f"Описание: {service.description or 'не указано'}\n\n"
+                f"Что хотите изменить?\n\n"
+                f"Отправьте:\n"
+                f"• название: Новое название\n"
+                f"• цена: 1500\n"
+                f"• длительность: 60\n"
+                f"• категория: Новая категория\n"
+                f"• описание: Новое описание\n"
+                f"• отмена - для отмены"
+            )
+
+        return EDITING_SERVICE
+
+    async def process_service_edit(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Обработка редактирования услуги"""
+        service_id = context.user_data.get('editing_service_id')
+
+        if not service_id:
+            await update.message.reply_text("Ошибка: услуга не выбрана")
+            return ConversationHandler.END
+
+        text = update.message.text
+
+        if text.lower() == 'отмена' or text.lower() == '/cancel':
+            await update.message.reply_text("Редактирование отменено")
+            context.user_data.pop('editing_service_id', None)
+            return ConversationHandler.END
+
+        if text.lower() == '/done':
+            await update.message.reply_text("✅ Редактирование завершено")
+            context.user_data.pop('editing_service_id', None)
+            return ConversationHandler.END
+
+        # Парсинг команды
+        if ':' not in text:
+            await update.message.reply_text(
+                "❌ Неверный формат!\n\n"
+                "Используйте:\n"
+                "название: Новое название\n"
+                "цена: 1500\n"
+                "длительность: 60"
+            )
+            return EDITING_SERVICE
+
+        field, value = text.split(':', 1)
+        field = field.strip().lower()
+        value = value.strip()
+
+        async with async_session() as session:
+            result = await session.execute(
+                select(Service).where(Service.id == service_id)
+            )
+            service = result.scalars().first()
+
+            if not service:
+                await update.message.reply_text("Ошибка: услуга не найдена")
+                return ConversationHandler.END
+
+            try:
+                if field == 'название' or field == 'name':
+                    service.name = value
+                    await session.commit()
+                    await update.message.reply_text(f"✅ Название изменено на: {value}")
+                elif field == 'цена' or field == 'price':
+                    service.price = float(value)
+                    await session.commit()
+                    await update.message.reply_text(f"✅ Цена изменена на: {value} ₽")
+                elif field == 'длительность' or field == 'duration':
+                    service.duration = int(value)
+                    await session.commit()
+                    await update.message.reply_text(f"✅ Длительность изменена на: {value} мин")
+                elif field == 'категория' or field == 'category':
+                    service.category = value
+                    await session.commit()
+                    await update.message.reply_text(f"✅ Категория изменена на: {value}")
+                elif field == 'описание' or field == 'description':
+                    service.description = value
+                    await session.commit()
+                    await update.message.reply_text(f"✅ Описание изменено")
+                else:
+                    await update.message.reply_text(
+                        f"❌ Неизвестное поле: {field}\n"
+                        f"Доступные поля: название, цена, длительность, категория, описание"
+                    )
+            except ValueError:
+                await update.message.reply_text(
+                    f"❌ Неверное значение для поля {field}\n"
+                    f"Цена и длительность должны быть числами"
+                )
+
+        await update.message.reply_text("Отправьте еще изменения или /done для завершения")
+        return EDITING_SERVICE
+
+    # Обработчики кнопок "Назад"
+    async def handle_back_button(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Универсальный обработчик кнопки Назад"""
+        query = update.callback_query
+        await query.answer()
+
+        data = query.data
+
+        # Назад к главному меню
+        if data in ["admin_back_to_main", "back_to_main"]:
+            await query.message.reply_text(
+                f"Панель администратора салона «{config.SALON_INFO['name']}» 🔧",
+                reply_markup=AdminKeyboards.main_menu()
+            )
+            try:
+                await query.message.delete()
+            except:
+                pass
+
+        # Назад к меню сотрудников
+        elif data == "admin_employees_menu":
+            await query.edit_message_text(
+                "Управление сотрудниками:",
+                reply_markup=AdminKeyboards.employees_menu()
+            )
+
+        # Назад к списку сотрудников
+        elif data == "admin_list_employees":
+            await self.show_employees_list(update, context)
+
+        # Назад к меню услуг
+        elif data == "admin_services_menu":
+            await query.edit_message_text(
+                "Управление услугами:",
+                reply_markup=AdminKeyboards.services_menu()
+            )
+
+        # Назад к списку услуг
+        elif data == "admin_list_services":
+            await self.show_services_list(update, context)
+
+        # Назад к фильтру записей
+        elif data == "admin_appointments_filter":
+            await query.edit_message_text(
+                "Выберите период:",
+                reply_markup=AdminKeyboards.all_appointments_filter()
+            )
+
+        # Назад к списку записей
+        elif data == "admin_back_to_appointments":
+            # Возвращаемся к последнему фильтру
+            await query.edit_message_text(
+                "Выберите период:",
+                reply_markup=AdminKeyboards.all_appointments_filter()
+            )
