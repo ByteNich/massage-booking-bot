@@ -9,7 +9,20 @@ ADMIN_ID = int(os.getenv('ADMIN_ID', 0))
 EMPLOYEE_IDS = [int(id.strip()) for id in os.getenv('EMPLOYEE_IDS', '').split(',') if id.strip()]
 
 # Database
-DATABASE_URL = os.getenv('DATABASE_URL', 'sqlite+aiosqlite:///massage_bot.db')
+# Получаем DATABASE_URL и конвертируем в async версию если нужно
+_db_url = os.getenv('DATABASE_URL', 'sqlite+aiosqlite:///massage_bot.db')
+
+# Replit может предоставить postgres:// вместо postgresql://
+if _db_url.startswith('postgres://'):
+    _db_url = _db_url.replace('postgres://', 'postgresql://', 1)
+
+# Конвертируем синхронные драйверы в асинхронные
+if 'postgresql://' in _db_url and 'asyncpg' not in _db_url:
+    _db_url = _db_url.replace('postgresql://', 'postgresql+asyncpg://')
+elif 'sqlite:///' in _db_url and 'aiosqlite' not in _db_url:
+    _db_url = _db_url.replace('sqlite:///', 'sqlite+aiosqlite:///')
+
+DATABASE_URL = _db_url
 
 # Salon Info
 SALON_INFO = {
