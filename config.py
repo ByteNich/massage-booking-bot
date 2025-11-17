@@ -26,7 +26,7 @@ DATABASE_URL = _db_url
 
 # Salon Info
 SALON_INFO = {
-    'name': os.getenv('SALON_NAME', 'Баланс'),
+    'name': os.getenv('SALON_NAME', 'VOLGA SPA'),
     'address': os.getenv('SALON_ADDRESS', 'Приволжский федеральный округ, Нижегородская область, городской округ Нижний Новгород, Нижний Новгород, Советская улица, 12 этаж 4, офис 436'),
     'phone': os.getenv('SALON_PHONE', '+7 (987) 530-91-00'),
     'schedule': os.getenv('SALON_SCHEDULE', 'вт,чт-сб 8:00-20:00'),
@@ -44,3 +44,7 @@ REMINDER_HOURS = [int(h) for h in os.getenv('REMINDER_HOURS', '24,3').split(',')
 ROLE_CLIENT = 'client'
 ROLE_EMPLOYEE = 'employee'
 ROLE_ADMIN = 'admin'
+
+# Google Gemini API
+GEMINI_API_KEY = os.getenv('GEMINI_API_KEY', '')
+GEMINI_MODEL = os.getenv('GEMINI_MODEL', 'gemini-1.5-flash')  # бесплатная версия

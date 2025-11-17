@@ -10,6 +10,7 @@ class ClientKeyboards:
         """Главное меню клиента (inline)"""
         keyboard = [
             [InlineKeyboardButton("📅 Записаться на процедуру", callback_data="client_booking")],
+            [InlineKeyboardButton("💬 Задать вопрос AI-ассистенту", callback_data="client_ai_chat")],
             [InlineKeyboardButton("📝 Мои записи", callback_data="client_my_appointments")],
             [InlineKeyboardButton("ℹ️ Информация о салоне", callback_data="client_info")],
         ]
@@ -118,5 +119,14 @@ class ClientKeyboards:
         keyboard = [
             [InlineKeyboardButton("📍 Открыть в Яндекс.Картах", url="https://yandex.ru/maps/-/CLCOeWmw")],
             [InlineKeyboardButton("◀️ Назад", callback_data="back_to_main")],
+        ]
+        return InlineKeyboardMarkup(keyboard)
+
+    @staticmethod
+    def ai_chat_menu():
+        """Меню AI-чата"""
+        keyboard = [
+            [InlineKeyboardButton("📅 Записаться на процедуру", callback_data="ai_chat_go_booking")],
+            [InlineKeyboardButton("❌ Завершить диалог", callback_data="ai_chat_end")],
         ]
         return InlineKeyboardMarkup(keyboard)

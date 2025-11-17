@@ -21,7 +21,9 @@ from database.models import Employee, User
 from handlers.client import ClientHandlers, SELECTING_SERVICE, SELECTING_DATE, SELECTING_TIME, CONFIRMING_BOOKING
 from handlers.employee import EmployeeHandlers, EMP_SELECTING_SERVICE, EMP_ENTERING_PHONE, EMP_SELECTING_DATE, EMP_SELECTING_TIME, EMP_CONFIRMING, EMP_EDITING
 from handlers.admin import AdminHandlers, EDITING_EMPLOYEE, EDITING_SERVICE, BROADCAST_TEXT, BROADCAST_PHOTO, BROADCAST_CONFIRM
+from handlers.ai_chat import AIChatHandlers, AI_CHATTING
 from utils.scheduler import NotificationScheduler
+from utils.ai_service import AIService
 from utils.helpers import get_user_role
 from sqlalchemy import select
 
@@ -39,9 +41,11 @@ class MassageBookingBot:
     def __init__(self):
         self.application = None
         self.scheduler = None
+        self.ai_service = None
         self.client_handlers = None
         self.employee_handlers = None
         self.admin_handlers = None
+        self.ai_chat_handlers = None
 
     async def post_init(self, application: Application):
         """Инициализация после создания приложения"""
@@ -56,6 +60,10 @@ class MassageBookingBot:
         self.scheduler = NotificationScheduler(application.bot)
         self.scheduler.start()
         logger.info("Notification scheduler started")
+
+        # Инициализация AI-сервиса
+        self.ai_service = AIService()
+        logger.info("AI Service initialized")
 
     async def create_initial_employee(self):
         """Создание начального сотрудника"""
@@ -142,8 +150,12 @@ class MassageBookingBot:
         # Клиент (обработка НЕ-ConversationHandler callbacks)
         if role == config.ROLE_CLIENT:
             # Главное меню
-            if data in ["client_booking", "client_my_appointments", "client_info"]:
-                await self.client_handlers.handle_main_menu_callback(update, context)
+            if data in ["client_booking", "client_my_appointments", "client_info", "client_ai_chat"]:
+                if data == "client_ai_chat":
+                    # AI-чат обрабатывается через ConversationHandler
+                    pass
+                else:
+                    await self.client_handlers.handle_main_menu_callback(update, context)
             # Навигация по услугам
             elif data.startswith("category_"):
                 await self.client_handlers.show_category_services(update, context)
@@ -237,14 +249,16 @@ class MassageBookingBot:
         self.client_handlers = ClientHandlers(None)  # scheduler будет установлен позже
         self.employee_handlers = EmployeeHandlers(None)  # scheduler будет установлен позже
         self.admin_handlers = AdminHandlers(None)  # scheduler будет установлен позже
+        self.ai_chat_handlers = AIChatHandlers(None)  # ai_service будет установлен позже
 
-        # Устанавливаем scheduler после инициализации
-        async def set_scheduler():
+        # Устанавливаем scheduler и ai_service после инициализации
+        async def set_services():
             self.client_handlers.scheduler = self.scheduler
             self.employee_handlers.scheduler = self.scheduler
             self.admin_handlers.scheduler = self.scheduler
+            self.ai_chat_handlers.ai_service = self.ai_service
 
-        self.application.job_queue.run_once(lambda _: asyncio.create_task(set_scheduler()), 1)
+        self.application.job_queue.run_once(lambda _: asyncio.create_task(set_services()), 1)
 
         # Регистрация обработчиков
         self.application.add_handler(CommandHandler("start", self.route_start_command))
@@ -391,12 +405,33 @@ class MassageBookingBot:
             ],
         )
 
+        # ConversationHandler для AI-чата
+        ai_chat_handler = ConversationHandler(
+            entry_points=[
+                CallbackQueryHandler(
+                    self.ai_chat_handlers.start_ai_chat,
+                    pattern="^client_ai_chat$"
+                ),
+            ],
+            states={
+                AI_CHATTING: [
+                    MessageHandler(filters.TEXT & ~filters.COMMAND, self.ai_chat_handlers.handle_ai_message),
+                    CallbackQueryHandler(self.ai_chat_handlers.end_ai_chat, pattern="^ai_chat_end$"),
+                    CallbackQueryHandler(self.ai_chat_handlers.go_to_booking_from_chat, pattern="^ai_chat_go_booking$"),
+                ],
+            },
+            fallbacks=[
+                CallbackQueryHandler(self.ai_chat_handlers.end_ai_chat, pattern="^ai_chat_end$"),
+            ],
+        )
+
         self.application.add_handler(booking_handler)
         self.application.add_handler(edit_employee_handler)
         self.application.add_handler(edit_service_handler)
         self.application.add_handler(emp_new_appointment_handler)
         self.application.add_handler(emp_edit_appointment_handler)
         self.application.add_handler(broadcast_handler)
+        self.application.add_handler(ai_chat_handler)
         self.application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.route_message))
         self.application.add_handler(CallbackQueryHandler(self.route_callback))
 
